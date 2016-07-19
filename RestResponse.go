@@ -12,6 +12,13 @@ type RestResponse struct {
 	Entries []RestEntry `xml:"entry"`
 }
 
+func (resp *RestResponse) string() string {
+	result := "Title: " + resp.Title +
+		"Id: " + resp.Id +
+		"Updated: " + resp.Updated
+	return result
+}
+
 type RestEntry struct {
 	Messages string         `xml:"messages"`
 	Title    string         `xml:"title"`
@@ -28,5 +35,9 @@ type RestDictionary struct {
 
 type RestKey struct {
 	Name  string `xml:"name,attr"`
-	Value string `xml:"key"`
+	Value string `xml:",chardata"`
+}
+
+func (key *RestKey) GoString() string {
+	return "Name: " + key.Name + "Value: " + key.Value
 }
