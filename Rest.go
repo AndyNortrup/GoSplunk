@@ -14,11 +14,11 @@ import (
 const rest_base_url = "https://localhost:8089"
 const login_endpoint = "services/auth/login"
 
-func GetSessionKey(username string, password string) (*SplunkSessionKey, error) {
+func NewSessionKey(username string, password string) (*SessionKey, error) {
 
 	u, err := url.ParseRequestURI(rest_base_url)
 	if err != nil {
-		return &SplunkSessionKey{}, err
+		return &SessionKey{}, err
 	}
 
 	u.Path = login_endpoint
@@ -31,7 +31,7 @@ func GetSessionKey(username string, password string) (*SplunkSessionKey, error) 
 
 	r, err := http.NewRequest(http.MethodPost, urlStr, bytes.NewBufferString(data.Encode()))
 	if err != nil {
-		return &SplunkSessionKey{}, err
+		return &SessionKey{}, err
 	}
 	r.Header.Add("Content-Length", strconv.Itoa(len(data.Encode())))
 
@@ -39,12 +39,12 @@ func GetSessionKey(username string, password string) (*SplunkSessionKey, error) 
 	resp, err := client.Do(r)
 
 	if err != nil {
-		return &SplunkSessionKey{}, err
+		return &SessionKey{}, err
 	}
 
 	defer resp.Body.Close()
 
-	restResp := &SplunkSessionKey{}
+	restResp := &SessionKey{}
 	decoder := xml.NewDecoder(resp.Body)
 	err = decoder.Decode(restResp)
 	if err != nil {
@@ -57,11 +57,11 @@ func GetSessionKey(username string, password string) (*SplunkSessionKey, error) 
 func GetEntities(path []string,
 	namespace string,
 	owner string,
-	sessionKey string) (*SplunkRestResponse, error) {
+	sessionKey string) (*RestResponse, error) {
 
 	u, err := buildRequestPath(path, namespace, owner)
 	if err != nil {
-		return &SplunkRestResponse{}, err
+		return &RestResponse{}, err
 	}
 
 	//Create the Request
@@ -73,22 +73,22 @@ func GetEntities(path []string,
 	resp, err := client.Do(r)
 
 	if resp.StatusCode != http.StatusOK {
-		return &SplunkRestResponse{}, errors.New(resp.Status)
+		return &RestResponse{}, errors.New(resp.Status)
 	}
 
 	if err != nil {
-		return &SplunkRestResponse{}, err
+		return &RestResponse{}, err
 	}
 
 	defer resp.Body.Close()
 
 	//Decode the response from XML
 	decoder := xml.NewDecoder(resp.Body)
-	result := &SplunkRestResponse{}
+	result := &RestResponse{}
 
 	err = decoder.Decode(result)
 	if err != nil {
-		return &SplunkRestResponse{}, err
+		return &RestResponse{}, err
 	}
 
 	return result, nil

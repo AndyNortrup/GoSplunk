@@ -6,7 +6,7 @@ const accountName = "testing_user"
 const password = "TestAccount"
 
 func TestGetSessionKey(t *testing.T) {
-	sessionKey, err := GetSessionKey(accountName, password)
+	sessionKey, err := NewSessionKey(accountName, password)
 	if err != nil {
 		t.Fatalf("Failed to get session key: %v\n", err)
 	}
@@ -27,7 +27,7 @@ func TestGetSessionKey(t *testing.T) {
  */
 
 func TestRestResponse(t *testing.T) {
-	sessionKey, err := GetSessionKey(accountName, password)
+	sessionKey, err := NewSessionKey(accountName, password)
 	if err != nil {
 		t.Fatal("Unable to get access token.  Check that Splunk is running.")
 	}
