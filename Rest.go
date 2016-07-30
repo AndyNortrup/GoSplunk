@@ -6,17 +6,18 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 )
 
-const rest_base_url = "https://localhost:8089"
+const LocalSplunkMgmntURL = "https://localhost:8089"
 const login_endpoint = "services/auth/login"
 
-func NewSessionKey(username string, password string) (*SessionKey, error) {
+func NewSessionKey(username string, password string, baseURL string) (*SessionKey, error) {
 
-	u, err := url.ParseRequestURI(rest_base_url)
+	u, err := url.ParseRequestURI(baseURL)
 	if err != nil {
 		return &SessionKey{}, err
 	}
@@ -54,28 +55,18 @@ func NewSessionKey(username string, password string) (*SessionKey, error) {
 	return restResp, nil
 }
 
-func GetEntities(path []string,
+func GetEntities(baseURL string,
+	path []string,
 	namespace string,
 	owner string,
 	sessionKey string) (*RestResponse, error) {
 
-	u, err := buildRequestPath(path, namespace, owner)
+	u, err := buildRequestPath(baseURL, path, namespace, owner)
 	if err != nil {
 		return &RestResponse{}, err
 	}
 
-	//Create the Request
-	r, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("%v", u), nil)
-	r.Header.Add("Authorization", "Splunk "+sessionKey)
-
-	//Create a client
-	client := newSplunkHttpClient(false)
-	resp, err := client.Do(r)
-
-	if resp.StatusCode != http.StatusOK {
-		return &RestResponse{}, errors.New(resp.Status)
-	}
-
+	resp, err := makeRestRequest(u, sessionKey)
 	if err != nil {
 		return &RestResponse{}, err
 	}
@@ -94,14 +85,65 @@ func GetEntities(path []string,
 	return result, nil
 }
 
+// KVStoreGetCollection returns values from a KV Store collection.  Result is a
+// io.ReadCloser so that it can be JSON decoder.
+func KVStoreGetCollection(baseURL string,
+	collection string,
+	namespace string,
+	owner string,
+	sessionKey string) (io.ReadCloser, error) {
+
+	u, err := buildRequestPath(baseURL, []string{"storage", "collections"},
+		namespace, owner)
+
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := makeRestRequest(u, sessionKey)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New(resp.Status)
+	}
+
+	return resp.Body, nil
+}
+
+func makeRestRequest(u *url.URL, sessionKey string) (*http.Response, error) {
+	//Create the Request
+	r, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("%v", u), nil)
+	r.Header.Add("Authorization", "Splunk "+sessionKey)
+
+	//Create a client
+	client := newSplunkHttpClient(false)
+	resp, err := client.Do(r)
+
+	if resp.StatusCode != http.StatusOK {
+		return &http.Response{}, errors.New(resp.Status)
+	}
+
+	if err != nil {
+		return &http.Response{}, err
+	}
+
+	return resp, nil
+}
+
 //buildRequestPath builds a path for the REST request
-func buildRequestPath(pieces []string, namespace string, owner string) (*url.URL, error) {
+func buildRequestPath(baseURL string,
+	pieces []string,
+	namespace string,
+	owner string) (*url.URL, error) {
+
 	if len(pieces) < 2 {
 		return &url.URL{}, errors.New("Not enough path specifications.")
 	}
 
 	//Create Request urlStr
-	u, _ := url.ParseRequestURI(rest_base_url)
+	u, _ := url.ParseRequestURI(baseURL)
 
 	//Build the address
 	if len(namespace) > 0 {

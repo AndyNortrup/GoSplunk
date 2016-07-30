@@ -9,7 +9,7 @@ import (
 // the call from Splunk for a Modular input
 type ModularInputHandler interface {
 	ReturnScheme()
-	ValidateScheme()
+	ValidateScheme() (bool, string)
 	StreamEvents()
 }
 
@@ -45,6 +45,7 @@ type ModInputConfig struct {
 type ModInputStanza struct {
 	StanzaName string          `xml:"name,attr"`
 	Params     []ModInputParam `xml:"param"`
+	ParamMap   map[string]string
 }
 
 // ModInputParam are key value pairs for the input as defined in inputs.conf
@@ -71,6 +72,7 @@ type Argument struct {
 	Name        string   `xml:"name,attr"`
 	Title       string   `xml:"title"`
 	Description string   `xml:"description"`
+	DataType    string   `xml:"data_type"`
 }
 
 // ReadModInputConfig takes a reader with XML data and Decodes it into a
@@ -79,5 +81,14 @@ func ReadModInputConfig(r io.Reader) (*ModInputConfig, error) {
 	decoder := xml.NewDecoder(r)
 	config := &ModInputConfig{}
 	err := decoder.Decode(&config)
+
+	for stanzaIndex, stanza := range config.Stanzas {
+		stanza.ParamMap = make(map[string]string)
+		for _, param := range stanza.Params {
+			stanza.ParamMap[param.Name] = param.Value
+		}
+		config.Stanzas[stanzaIndex] = stanza
+	}
+
 	return config, err
 }
