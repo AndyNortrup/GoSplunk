@@ -1,17 +1,21 @@
 package splunk
 
 import (
+	"encoding/json"
 	"encoding/xml"
+	"io/ioutil"
 	"log"
 	"strings"
 	"testing"
+
+	"golang.org/x/oauth2"
 )
 
 const accountName = "testing_user"
 const password = "TestAccount"
 
 func TestGetSessionKey(t *testing.T) {
-	sessionKey, err := NewSessionKey(accountName, password)
+	sessionKey, err := NewSessionKey(accountName, password, LocalSplunkMgmntURL)
 	if err != nil {
 		t.Fatalf("Failed to get session key: %v\n", err)
 	}
@@ -33,12 +37,13 @@ func TestGetSessionKey(t *testing.T) {
  */
 
 func TestRestResponse(t *testing.T) {
-	sessionKey, err := NewSessionKey(accountName, password)
+	sessionKey, err := NewSessionKey(accountName, password, LocalSplunkMgmntURL)
 	if err != nil {
 		t.Fatal("Unable to get access token.  Check that Splunk is running.")
 	}
 
-	response, err := GetEntities([]string{"services", "properties"}, "", "", sessionKey.SessionKey)
+	response, err := GetEntities(LocalSplunkMgmntURL,
+		[]string{"services", "properties"}, "", "", sessionKey.SessionKey)
 	if err != nil {
 		t.Fatal("Error querying endpoint, check that Splunk is running")
 	}
@@ -143,5 +148,53 @@ func TestRestUnmarshal(t *testing.T) {
 			expectedKeyZeroValue,
 			result)
 		t.Fail()
+	}
+}
+
+func TestUpdateKVStore(t *testing.T) {
+	sessionKey, err := NewSessionKey(accountName, password, LocalSplunkMgmntURL)
+	if err != nil {
+		t.Fatal("Unable to get access token.  Check that Splunk is running.")
+	}
+
+	type User struct {
+		Name         string `json:"name"`
+		UserID       string `json:"id"`
+		Scope        []string
+		oauth2.Token `json:"token"`
+		TokenExpiry  string `json:"token_expiry"`
+	}
+
+	token := oauth2.Token{
+		AccessToken:  "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0VDVaVzYiLCJhdWQiOiIyMjdNVkoiLCJpc3MiOiJGaXRiaXQiLCJ0eXAiOiJhY2Nlc3NfdG9rZW4iLCJzY29wZXMiOiJyc29jIHJzZXQgcmFjdCBybG9jIHJ3ZWkgcmhyIHJudXQgcnBybyByc2xlIiwiZXhwIjoxNDcwODIwMzkwLCJpYXQiOjE0NzA3OTE1OTB9.gXKGs_FsTXNC6ayyAfLbPGIMytgV-Jz4XdiilUrbQwU",
+		RefreshToken: "4a724b82c52fd0f556402e270f27674be5ae5dfb2646b213ced87512e06aa9a8",
+		TokenType:    "Bearer",
+	}
+	payload := &User{
+		UserID: "4T5ZW6",
+		Name:   "Andrew CHANGED Nortrup",
+		Scope:  []string{"settings nutrition activity heartrate weight sleep location social profile"},
+		Token:  token,
+	}
+
+	err = UpdateKVStore(LocalSplunkMgmntURL, "fitbit_tokens", "4T5ZW6", payload, "fitness_for_splunk", "nobody", sessionKey.SessionKey)
+	if err != nil {
+		log.Printf("Error updating KV Store: %v", err)
+	}
+
+	reader, err := KVStoreGetCollection(LocalSplunkMgmntURL, "fitbit_tokens", "fitness_for_splunk", "nobody", sessionKey.SessionKey)
+	defer reader.Close()
+
+	decoder := json.NewDecoder(reader)
+	var result []User
+	err = decoder.Decode(&result)
+	if err != nil {
+		b, _ := ioutil.ReadAll(reader)
+		log.Fatalf("Failed to decode updated KVStore Key\nError:%v\nResponse:%s", err, b)
+	}
+
+	if result[0].Name != "Andrew CHANGED Nortrup" {
+		t.Fail()
+		t.Logf("Failed to update KV Store record: %v", result[0])
 	}
 }
