@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -130,7 +129,6 @@ func KVStoreUpdate(baseURL, collection, id string,
 	//Encode the payload into JSON
 	b, err := json.Marshal(payload)
 
-	log.Printf("Raw Object: %v\n Encoded JSON: %s", payload, b)
 	if err != nil {
 		return err
 	}
