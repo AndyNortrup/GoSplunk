@@ -15,7 +15,8 @@ const accountName = "testing_user"
 const password = "TestAccount"
 
 func TestGetSessionKey(t *testing.T) {
-	sessionKey, err := NewSessionKey(accountName, password, LocalSplunkMgmntURL)
+	c := &Client{BaseURL: LocalSplunkMgmntURL}
+	sessionKey, err := c.getSessionKey(accountName, password)
 	if err != nil {
 		t.Fatalf("Failed to get session key: %v\n", err)
 	}
@@ -37,13 +38,13 @@ func TestGetSessionKey(t *testing.T) {
  */
 
 func TestRestResponse(t *testing.T) {
-	sessionKey, err := NewSessionKey(accountName, password, LocalSplunkMgmntURL)
+	c, err := NewClientFromLogin(accountName,
+		password, "", "", LocalSplunkMgmntURL, false)
 	if err != nil {
 		t.Fatal("Unable to get access token.  Check that Splunk is running.")
 	}
 
-	response, err := GetEntities(LocalSplunkMgmntURL,
-		[]string{"services", "properties"}, "", "", sessionKey.SessionKey)
+	response, err := c.GetEntities([]string{"services", "properties"})
 	if err != nil {
 		t.Fatal("Error querying endpoint, check that Splunk is running")
 	}
@@ -152,7 +153,13 @@ func TestRestUnmarshal(t *testing.T) {
 }
 
 func TestUpdateKVStore(t *testing.T) {
-	sessionKey, err := NewSessionKey(accountName, password, LocalSplunkMgmntURL)
+	c, err := NewClientFromLogin(accountName,
+		password,
+		"fitness_for_splunk",
+		"nobody",
+		LocalSplunkMgmntURL,
+		false)
+
 	if err != nil {
 		t.Fatal("Unable to get access token.  Check that Splunk is running.")
 	}
@@ -177,12 +184,13 @@ func TestUpdateKVStore(t *testing.T) {
 		Token:  token,
 	}
 
-	err = UpdateKVStore(LocalSplunkMgmntURL, "fitbit_tokens", "4T5ZW6", payload, "fitness_for_splunk", "nobody", sessionKey.SessionKey)
+	err = c.KVStoreUpdate("fitbit_tokens", "4T5ZW6", payload)
+
 	if err != nil {
 		log.Printf("Error updating KV Store: %v", err)
 	}
 
-	reader, err := KVStoreGetCollection(LocalSplunkMgmntURL, "fitbit_tokens", "fitness_for_splunk", "nobody", sessionKey.SessionKey)
+	reader, err := c.KVStoreGetCollection("fitbit_tokens")
 	defer reader.Close()
 
 	decoder := json.NewDecoder(reader)
@@ -196,5 +204,183 @@ func TestUpdateKVStore(t *testing.T) {
 	if result[0].Name != "Andrew CHANGED Nortrup" {
 		t.Fail()
 		t.Logf("Failed to update KV Store record: %v", result[0])
+	}
+}
+
+func TestDecodePasswordStore(t *testing.T) {
+	input := `<?xml-stylesheet type="text/xml" href="/static/atom.xsl"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:s="http://dev.splunk.com/ns/rest" xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">
+  <title>passwords</title>
+  <id>https://localhost:8089/servicesNS/nobody/TA-FitnessTrackers/storage/passwords</id>
+  <updated>2016-08-10T06:43:30-07:00</updated>
+  <generator build="f2c836328108" version="6.4.0"/>
+  <author>
+    <name>Splunk</name>
+  </author>
+  <link href="/servicesNS/nobody/TA-FitnessTrackers/storage/passwords/_new" rel="create"/>
+  <link href="/servicesNS/nobody/TA-FitnessTrackers/storage/passwords/_reload" rel="_reload"/>
+  <link href="/servicesNS/nobody/TA-FitnessTrackers/storage/passwords/_acl" rel="_acl"/>
+  <opensearch:totalResults>3</opensearch:totalResults>
+  <opensearch:itemsPerPage>30</opensearch:itemsPerPage>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <s:messages/>
+  <entry>
+    <title>AWS Account:AKIAJJNA2AY6YKAJHM2Q:</title>
+    <id>https://localhost:8089/servicesNS/nobody/Splunk_TA_aws/storage/passwords/AWS%20Account%3AAKIAJJNA2AY6YKAJHM2Q%3A</id>
+    <updated>2016-08-10T06:43:30-07:00</updated>
+    <link href="/servicesNS/nobody/Splunk_TA_aws/storage/passwords/AWS%20Account%3AAKIAJJNA2AY6YKAJHM2Q%3A" rel="alternate"/>
+    <author>
+      <name>anortrup</name>
+    </author>
+    <link href="/servicesNS/nobody/Splunk_TA_aws/storage/passwords/AWS%20Account%3AAKIAJJNA2AY6YKAJHM2Q%3A" rel="list"/>
+    <link href="/servicesNS/nobody/Splunk_TA_aws/storage/passwords/AWS%20Account%3AAKIAJJNA2AY6YKAJHM2Q%3A/_reload" rel="_reload"/>
+    <link href="/servicesNS/nobody/Splunk_TA_aws/storage/passwords/AWS%20Account%3AAKIAJJNA2AY6YKAJHM2Q%3A" rel="edit"/>
+    <link href="/servicesNS/nobody/Splunk_TA_aws/storage/passwords/AWS%20Account%3AAKIAJJNA2AY6YKAJHM2Q%3A" rel="remove"/>
+    <content type="text/xml">
+      <s:dict>
+        <s:key name="clear_password">4xUmMJnZ/RPwEVHhMh6EPML8fieYcWAvAvSUkrMK</s:key>
+        <s:key name="eai:acl">
+          <s:dict>
+            <s:key name="app">Splunk_TA_aws</s:key>
+            <s:key name="can_change_perms">1</s:key>
+            <s:key name="can_list">1</s:key>
+            <s:key name="can_share_app">1</s:key>
+            <s:key name="can_share_global">1</s:key>
+            <s:key name="can_share_user">1</s:key>
+            <s:key name="can_write">1</s:key>
+            <s:key name="modifiable">1</s:key>
+            <s:key name="owner">anortrup</s:key>
+            <s:key name="perms">
+              <s:dict>
+                <s:key name="read">
+                  <s:list>
+                    <s:item>*</s:item>
+                  </s:list>
+                </s:key>
+                <s:key name="write">
+                  <s:list>
+                    <s:item>admin</s:item>
+                  </s:list>
+                </s:key>
+              </s:dict>
+            </s:key>
+            <s:key name="removable">1</s:key>
+            <s:key name="sharing">global</s:key>
+          </s:dict>
+        </s:key>
+        <s:key name="encr_password">$1$4ckwFDRQG6MffaeQnAigD+ZoEISu+ft0mtyvgMt4pWb5GBBENpNYM/Y=</s:key>
+        <s:key name="password">********</s:key>
+        <s:key name="realm">AWS Account</s:key>
+        <s:key name="username">AKIAJJNA2AY6YKAJHM2Q</s:key>
+      </s:dict>
+    </content>
+  </entry>
+  <entry>
+    <title>fitbit:227MVJ:</title>
+    <id>https://localhost:8089/servicesNS/nobody/TA-FitnessTrackers/storage/passwords/fitbit%3A227MVJ%3A</id>
+    <updated>2016-08-10T06:43:30-07:00</updated>
+    <link href="/servicesNS/nobody/TA-FitnessTrackers/storage/passwords/fitbit%3A227MVJ%3A" rel="alternate"/>
+    <author>
+      <name>nobody</name>
+    </author>
+    <link href="/servicesNS/nobody/TA-FitnessTrackers/storage/passwords/fitbit%3A227MVJ%3A" rel="list"/>
+    <link href="/servicesNS/nobody/TA-FitnessTrackers/storage/passwords/fitbit%3A227MVJ%3A/_reload" rel="_reload"/>
+    <link href="/servicesNS/nobody/TA-FitnessTrackers/storage/passwords/fitbit%3A227MVJ%3A" rel="edit"/>
+    <link href="/servicesNS/nobody/TA-FitnessTrackers/storage/passwords/fitbit%3A227MVJ%3A" rel="remove"/>
+    <content type="text/xml">
+      <s:dict>
+        <s:key name="clear_password">??p(ѳ?\x1B\x1F?\x19??dh??_4??0???a??E\x10?8</s:key>
+        <s:key name="eai:acl">
+          <s:dict>
+            <s:key name="app">TA-FitnessTrackers</s:key>
+            <s:key name="can_change_perms">1</s:key>
+            <s:key name="can_list">1</s:key>
+            <s:key name="can_share_app">1</s:key>
+            <s:key name="can_share_global">1</s:key>
+            <s:key name="can_share_user">0</s:key>
+            <s:key name="can_write">1</s:key>
+            <s:key name="modifiable">1</s:key>
+            <s:key name="owner">nobody</s:key>
+            <s:key name="perms">
+              <s:dict>
+                <s:key name="read">
+                  <s:list>
+                    <s:item>*</s:item>
+                  </s:list>
+                </s:key>
+                <s:key name="write">
+                  <s:list>
+                    <s:item>admin</s:item>
+                  </s:list>
+                </s:key>
+              </s:dict>
+            </s:key>
+            <s:key name="removable">1</s:key>
+            <s:key name="sharing">app</s:key>
+          </s:dict>
+        </s:key>
+        <s:key name="encr_password">$1$KzoVUaipiOIvzu50TTqA6n9fEmILhCLhHtRAV6g/Q5SA</s:key>
+        <s:key name="password">********</s:key>
+        <s:key name="realm">fitbit</s:key>
+        <s:key name="username">227MVJ</s:key>
+      </s:dict>
+    </content>
+  </entry>
+  <entry>
+    <title>google:562161563902-3a6rur7qknsh1a2u7p74elrghfa2paqi.apps.googleusercontent.com:</title>
+    <id>https://localhost:8089/servicesNS/nobody/TA-FitnessTrackers/storage/passwords/google%3A562161563902-3a6rur7qknsh1a2u7p74elrghfa2paqi.apps.googleusercontent.com%3A</id>
+    <updated>2016-08-10T06:43:30-07:00</updated>
+    <link href="/servicesNS/nobody/TA-FitnessTrackers/storage/passwords/google%3A562161563902-3a6rur7qknsh1a2u7p74elrghfa2paqi.apps.googleusercontent.com%3A" rel="alternate"/>
+    <author>
+      <name>nobody</name>
+    </author>
+    <link href="/servicesNS/nobody/TA-FitnessTrackers/storage/passwords/google%3A562161563902-3a6rur7qknsh1a2u7p74elrghfa2paqi.apps.googleusercontent.com%3A" rel="list"/>
+    <link href="/servicesNS/nobody/TA-FitnessTrackers/storage/passwords/google%3A562161563902-3a6rur7qknsh1a2u7p74elrghfa2paqi.apps.googleusercontent.com%3A/_reload" rel="_reload"/>
+    <link href="/servicesNS/nobody/TA-FitnessTrackers/storage/passwords/google%3A562161563902-3a6rur7qknsh1a2u7p74elrghfa2paqi.apps.googleusercontent.com%3A" rel="edit"/>
+    <link href="/servicesNS/nobody/TA-FitnessTrackers/storage/passwords/google%3A562161563902-3a6rur7qknsh1a2u7p74elrghfa2paqi.apps.googleusercontent.com%3A" rel="remove"/>
+    <content type="text/xml">
+      <s:dict>
+        <s:key name="clear_password">?!r???\x1E\???\x02)\x0Em??x???</s:key>
+        <s:key name="eai:acl">
+          <s:dict>
+            <s:key name="app">TA-FitnessTrackers</s:key>
+            <s:key name="can_change_perms">1</s:key>
+            <s:key name="can_list">1</s:key>
+            <s:key name="can_share_app">1</s:key>
+            <s:key name="can_share_global">1</s:key>
+            <s:key name="can_share_user">0</s:key>
+            <s:key name="can_write">1</s:key>
+            <s:key name="modifiable">1</s:key>
+            <s:key name="owner">nobody</s:key>
+            <s:key name="perms">
+              <s:dict>
+                <s:key name="read">
+                  <s:list>
+                    <s:item>*</s:item>
+                  </s:list>
+                </s:key>
+                <s:key name="write">
+                  <s:list>
+                    <s:item>admin</s:item>
+                  </s:list>
+                </s:key>
+              </s:dict>
+            </s:key>
+            <s:key name="removable">1</s:key>
+            <s:key name="sharing">app</s:key>
+          </s:dict>
+        </s:key>
+        <s:key name="encr_password">$1$OSpEC9b6r+dskv1FGFzBpSkOSxRtzCyNfw==</s:key>
+        <s:key name="password">********</s:key>
+        <s:key name="realm">google</s:key>
+        <s:key name="username">562161563902-3a6rur7qknsh1a2u7p74elrghfa2paqi.apps.googleusercontent.com</s:key>
+      </s:dict>
+    </content>
+  </entry>
+</feed>`
+	conf := &ModInputConfig{}
+	err := xml.Unmarshal([]byte(input), conf)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal input. %v", err)
 	}
 }

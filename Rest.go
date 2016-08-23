@@ -16,9 +16,57 @@ import (
 const LocalSplunkMgmntURL = "https://localhost:8089"
 const login_endpoint = "services/auth/login"
 
-func NewSessionKey(username string, password string, baseURL string) (*SessionKey, error) {
+type Client struct {
+	SessionKey  string
+	Namespace   string
+	Owner       string
+	BaseURL     string
+	ValidateTLS bool
+}
 
-	u, err := url.ParseRequestURI(baseURL)
+// NewClientFromSessionKey creates a Client object when the user already has
+// a session key.  For instance when you are writing a modular input which comes
+// with a session key provided in the configuration.
+func NewClientFromSessionKey(sessionKey, namespace, owner, baseURL string,
+	validateTLS bool) *Client {
+	return &Client{
+		SessionKey:  sessionKey,
+		Namespace:   namespace,
+		Owner:       owner,
+		BaseURL:     baseURL,
+		ValidateTLS: validateTLS,
+	}
+}
+
+// NewClientFromLogin creates a Client object is used when the user must provide
+// their credentials in order to log in.
+func NewClientFromLogin(username, password, namespace, owner, baseURL string,
+	validateTLS bool) (*Client, error) {
+
+	c := Client{
+		Namespace:   namespace,
+		Owner:       owner,
+		BaseURL:     baseURL,
+		ValidateTLS: validateTLS,
+	}
+
+	key, err := c.getSessionKey(username, password)
+	if err != nil {
+		return &Client{}, err
+	}
+
+	return &Client{
+		SessionKey:  key.SessionKey,
+		Namespace:   namespace,
+		Owner:       owner,
+		BaseURL:     baseURL,
+		ValidateTLS: validateTLS,
+	}, nil
+}
+
+func (c *Client) getSessionKey(username, password string) (*SessionKey, error) {
+
+	u, err := url.ParseRequestURI(c.BaseURL)
 	if err != nil {
 		return &SessionKey{}, err
 	}
@@ -37,7 +85,7 @@ func NewSessionKey(username string, password string, baseURL string) (*SessionKe
 	}
 	r.Header.Add("Content-Length", strconv.Itoa(len(data.Encode())))
 
-	client := newSplunkHttpClient(false)
+	client := c.newSplunkHttpClient()
 	resp, err := client.Do(r)
 
 	if err != nil {
@@ -56,18 +104,14 @@ func NewSessionKey(username string, password string, baseURL string) (*SessionKe
 	return restResp, nil
 }
 
-func GetEntities(baseURL string,
-	path []string,
-	namespace string,
-	owner string,
-	sessionKey string) (*RestResponse, error) {
+func (c *Client) GetEntities(path []string) (*RestResponse, error) {
 
-	u, err := buildRequestPath(baseURL, path, namespace, owner)
+	u, err := c.buildRequestPath(path)
 	if err != nil {
 		return &RestResponse{}, err
 	}
 
-	resp, err := makeGetRestRequest(u, sessionKey)
+	resp, err := c.makeGetRestRequest(u)
 	if err != nil {
 		return &RestResponse{}, err
 	}
@@ -88,20 +132,15 @@ func GetEntities(baseURL string,
 
 // KVStoreGetCollection returns values from a KV Store collection.  Result is a
 // io.ReadCloser so that it can be JSON decoder.
-func KVStoreGetCollection(baseURL string,
-	collection string,
-	namespace string,
-	owner string,
-	sessionKey string) (io.ReadCloser, error) {
+func (c *Client) KVStoreGetCollection(collection string) (io.ReadCloser, error) {
 
-	u, err := buildRequestPath(baseURL, []string{"storage", "collections", "data", collection},
-		namespace, owner)
+	u, err := c.buildRequestPath([]string{"storage", "collections", "data", collection})
 
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := makeGetRestRequest(u, sessionKey)
+	resp, err := c.makeGetRestRequest(u)
 	if err != nil {
 		return nil, err
 	}
@@ -113,12 +152,8 @@ func KVStoreGetCollection(baseURL string,
 	return resp.Body, nil
 }
 
-func KVStoreUpdate(baseURL, collection, id string,
-	payload interface{},
-	namespace, owner, sessionKey string) error {
-	u, err := buildRequestPath(baseURL,
-		[]string{"storage", "collections", "data", collection, id},
-		namespace, owner)
+func (c *Client) KVStoreUpdate(collection, id string, payload interface{}) error {
+	u, err := c.buildRequestPath([]string{"storage", "collections", "data", collection, id})
 
 	if err != nil {
 		return err
@@ -134,12 +169,12 @@ func KVStoreUpdate(baseURL, collection, id string,
 
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%v", u), reader)
 	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Authorization", "Splunk "+sessionKey)
+	req.Header.Add("Authorization", "Splunk "+c.SessionKey)
 
 	if err != nil {
 		return err
 	}
-	client := newSplunkHttpClient(false)
+	client := c.newSplunkHttpClient()
 	resp, err := client.Do(req)
 	defer resp.Body.Close()
 
@@ -150,13 +185,13 @@ func KVStoreUpdate(baseURL, collection, id string,
 	return nil
 }
 
-func makeGetRestRequest(u *url.URL, sessionKey string) (*http.Response, error) {
+func (c *Client) makeGetRestRequest(u *url.URL) (*http.Response, error) {
 	//Create the Request
 	r, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("%v", u), nil)
-	r.Header.Add("Authorization", "Splunk "+sessionKey)
+	r.Header.Add("Authorization", "Splunk "+c.SessionKey)
 
 	//Create a client
-	client := newSplunkHttpClient(false)
+	client := c.newSplunkHttpClient()
 	resp, err := client.Do(r)
 
 	if resp.StatusCode != http.StatusOK {
@@ -171,28 +206,25 @@ func makeGetRestRequest(u *url.URL, sessionKey string) (*http.Response, error) {
 }
 
 //buildRequestPath builds a path for the REST request
-func buildRequestPath(baseURL string,
-	pieces []string,
-	namespace string,
-	owner string) (*url.URL, error) {
+func (c *Client) buildRequestPath(pieces []string) (*url.URL, error) {
 
 	if len(pieces) < 2 {
 		return &url.URL{}, errors.New("Not enough path specifications.")
 	}
 
 	//Create Request urlStr
-	u, _ := url.ParseRequestURI(baseURL)
+	u, _ := url.ParseRequestURI(c.BaseURL)
 
 	//Build the address
-	if len(namespace) > 0 {
+	if len(c.Namespace) > 0 {
 		u.Path += "/servicesNS"
 
 		//Add the user
-		if len(owner) > 0 {
-			u.Path += "/" + owner
+		if len(c.Owner) > 0 {
+			u.Path += "/" + c.Owner
 		}
 
-		u.Path += "/" + namespace
+		u.Path += "/" + c.Namespace
 	}
 
 	for _, item := range pieces {
@@ -201,13 +233,13 @@ func buildRequestPath(baseURL string,
 	return u, nil
 }
 
-func newSplunkHttpClient(validateTLS bool) *http.Client {
+func (c *Client) newSplunkHttpClient() *http.Client {
 
 	//Splunk ships with self signed certificates and these run on a lot of instances
 	// this makes it really hard to do certificate validation
 	tr := &http.Transport{}
 
-	if !validateTLS {
+	if !c.ValidateTLS {
 		tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
 
