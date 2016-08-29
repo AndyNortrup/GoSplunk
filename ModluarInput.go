@@ -48,6 +48,16 @@ type ModInputStanza struct {
 	ParamMap   map[string]string
 }
 
+//Adds a parameter to the stanza
+func (stanza *ModInputStanza) AddParameter(name, value string) {
+	stanza.Params = append(stanza.Params, ModInputParam{Name: name, Value: value})
+
+	if stanza.ParamMap == nil {
+		stanza.ParamMap = make(map[string]string)
+	}
+	stanza.ParamMap[name] = value
+}
+
 // ModInputParam are key value pairs for the input as defined in inputs.conf
 type ModInputParam struct {
 	Name  string `xml:"name,attr"`

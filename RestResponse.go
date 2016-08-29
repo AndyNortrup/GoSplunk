@@ -29,6 +29,7 @@ type RestEntry struct {
 	Contents RestDictionary `xml:"content>dict"`
 }
 
+//TODO: add a map[sting]string to get easier access to values.
 type RestDictionary struct {
 	Keys []RestKey `xml:"key"`
 }

@@ -69,23 +69,7 @@ func modInputConfigCases(result *ModInputConfig, t *testing.T) {
 }
 
 func TestReadConfig(t *testing.T) {
-	config := `
-	<input>
-	  <server_host>myHost</server_host>
-	  <server_uri>https://127.0.0.1:8089</server_uri>
-	  <session_key>123102983109283019283</session_key>
-	  <checkpoint_dir>/opt/splunk/var/lib/splunk/modinputs</checkpoint_dir>
-	  <configuration>
-	    <stanza name="myScheme://aaa">
-	        <param name="param1">value1</param>
-	        <param name="param2">value2</param>
-	        <param name="disabled">0</param>
-	        <param name="index">default</param>
-	    </stanza>
-	  </configuration>
-	</input>`
-
-	result, err := ReadModInputConfig(strings.NewReader(config))
+	result, err := ReadModInputConfig(strings.NewReader(modInputConfigExample))
 	if err != nil {
 		t.Logf("Unable to read ModInputConfig: %v\n", err)
 		t.Fail()
