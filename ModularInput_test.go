@@ -85,3 +85,67 @@ func TestReadConfig(t *testing.T) {
 		t.Fail()
 	}
 }
+
+func TestEncodeScheme(t *testing.T) {
+
+	//Sample taken from
+	//http://docs.splunk.com/Documentation/Splunk/6.4.3/AdvancedDev/ModInputsScripts
+	testScheme := "<scheme><title>Amazon S3</title>" +
+		"<description>Get data from Amazon S3.</description>" +
+		"<use_external_validation>true</use_external_validation>" +
+		"<streaming_mode>xml</streaming_mode><endpoint><args><arg name=\"name\">" +
+		"<title>Resource name</title><description>An S3 resource name without the leading s3://. " +
+		"For example, for s3://bucket/file.txt specify bucket/file.txt. " +
+		"You can also monitor a whole bucket (for example by specifying 'bucket'), " +
+		"or files within a sub-directory of a bucket " +
+		"(for example 'bucket/some/directory/'; note the trailing slash)." +
+		"</description><data_type>string</data_type><required_on_create>true" +
+		"</required_on_create><required_on_edit>false</required_on_edit>" +
+		"</arg><arg name=\"key_id\"><title>Key ID</title><description>Your Amazon key ID." +
+		"</description><data_type>string</data_type><required_on_create>true</required_on_create>" +
+		"<required_on_edit>false</required_on_edit></arg><arg name=\"secret_key\">" +
+		"<title>Secret key</title><description>Your Amazon secret key.</description>" +
+		"<data_type>string</data_type><required_on_create>true</required_on_create>" +
+		"<required_on_edit>false</required_on_edit></arg></args></endpoint></scheme>"
+
+	scheme := NewModInputScheme("Amazon S3",
+		"Get data from Amazon S3.", true, StreamingModeXML)
+	scheme.AddArgument("name", "Resource name",
+		"An S3 resource name without the leading s3://. "+
+			"For example, for s3://bucket/file.txt specify bucket/file.txt. "+
+			"You can also monitor a whole bucket (for example by specifying 'bucket'), "+
+			"or files within a sub-directory of a bucket "+
+			"(for example 'bucket/some/directory/'; note the trailing slash).",
+		ModInputArgString, true, false)
+	scheme.AddArgument("key_id", "Key ID", "Your Amazon key ID.",
+		ModInputArgString, true, false)
+	scheme.AddArgument("secret_key", "Secret key", "Your Amazon secret key.",
+		ModInputArgString, true, false)
+
+	mTestScheme := &Scheme{}
+	err := xml.Unmarshal([]byte(testScheme), mTestScheme)
+
+	if err != nil {
+		t.Logf("Unable to Marshal testScheme to Scheme object: %v", err)
+		t.FailNow()
+	}
+
+	bTestScheme, err := xml.Marshal(mTestScheme)
+	if err != nil {
+		t.Log("Unable to Unmarshal testScheme to bytes.")
+		t.FailNow()
+	}
+
+	marshaled, err := xml.Marshal(scheme)
+	if err != nil {
+		t.Logf("Unable to marshal scheme to XML: %v", err)
+		t.FailNow()
+	}
+
+	if bytes.Compare(marshaled, bTestScheme) != 0 {
+		t.Logf("Marshalled scheme does not match expected scheme."+
+			"\nExpected: %s\nReceived: %s",
+			bTestScheme, marshaled)
+		t.Fail()
+	}
+}
