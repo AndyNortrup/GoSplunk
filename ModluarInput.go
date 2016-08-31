@@ -5,6 +5,17 @@ import (
 	"io"
 )
 
+type StreamingMode string
+
+const StreamingModeSimple = "simple"
+const StreamingModeXML = "xml"
+
+type ModInputArgDataType string
+
+const ModInputArgString = "string"
+const ModInputArgNumber = "number"
+const ModInputArgBoolean = "boolean"
+
 // ModularInputHandler is an interface that has the methods required to handle
 // the call from Splunk for a Modular input
 type ModularInputHandler interface {
@@ -67,22 +78,57 @@ type ModInputParam struct {
 // Scheme is the Scheme returned to Splunk to describe the required inputs for a
 // Mod Input
 type Scheme struct {
-	XMLName               xml.Name   `xml:"scheme"`
-	Title                 string     `xml:"title"`
-	Description           string     `xml:"description"`
-	UseExternalValidation bool       `xml:"use_external_validation"`
-	StreamingMode         string     `xml:"streaming_mode"`
-	Args                  []Argument `xml:"args"`
+	XMLName               xml.Name      `xml:"scheme"`
+	Title                 string        `xml:"title"`
+	Description           string        `xml:"description"`
+	UseExternalValidation bool          `xml:"use_external_validation"`
+	StreamingMode         StreamingMode `xml:"streaming_mode"`
+	Args                  []*Argument   `xml:"endpoint>args>arg"`
+}
+
+// NewModInputScheme creates a Scheme struct.
+func NewModInputScheme(title, description string,
+	externalValidation bool,
+	streamingMode StreamingMode) *Scheme {
+
+	result := &Scheme{
+		Title:                 title,
+		Description:           description,
+		UseExternalValidation: externalValidation,
+		StreamingMode:         streamingMode,
+		Args:                  []*Argument{},
+	}
+
+	return result
+}
+
+//AddArgument adds an agument to an introspection scheme.
+func (scheme *Scheme) AddArgument(name, title, description string,
+	dataType ModInputArgDataType,
+	requiredOnCreate, requiredOnEdit bool) {
+
+	scheme.Args = append(scheme.Args,
+		&Argument{
+			Name:             name,
+			Title:            title,
+			Description:      description,
+			DataType:         dataType,
+			RequiredOnCreate: requiredOnCreate,
+			RequiredOnEdit:   requiredOnEdit,
+		})
+
 }
 
 // Argument is an individual setting for a Modular input.  Returned as part of
 // the scheme
 type Argument struct {
-	XMLName     xml.Name `xml:"arg"`
-	Name        string   `xml:"name,attr"`
-	Title       string   `xml:"title"`
-	Description string   `xml:"description"`
-	DataType    string   `xml:"data_type"`
+	XMLName          xml.Name            `xml:"arg"`
+	Name             string              `xml:"name,attr"`
+	Title            string              `xml:"title"`
+	Description      string              `xml:"description"`
+	DataType         ModInputArgDataType `xml:"data_type"`
+	RequiredOnEdit   bool                `xml:"required_on_edit"`
+	RequiredOnCreate bool                `xml:"required_on_create"`
 }
 
 // ReadModInputConfig takes a reader with XML data and Decodes it into a
