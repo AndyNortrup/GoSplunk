@@ -3,6 +3,10 @@ package splunk
 import (
 	"encoding/xml"
 	"io"
+	"log"
+	"os"
+
+	splunk "github.com/AndyNortrup/GoSplunk"
 )
 
 type StreamingMode string
@@ -20,8 +24,24 @@ const ModInputArgBoolean = "boolean"
 // the call from Splunk for a Modular input
 type ModularInputHandler interface {
 	ReturnScheme()
-	ValidateScheme() (bool, string)
+	ValidateScheme() error
 	StreamEvents()
+}
+
+func HandleModInput(input splunk.ModularInputHandler) {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "--scheme":
+			input.ReturnScheme()
+		case "--validate-arguments":
+			err := input.ValidateScheme()
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	} else {
+		input.StreamEvents()
+	}
 }
 
 /*
