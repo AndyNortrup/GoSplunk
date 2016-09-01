@@ -1,7 +1,7 @@
 # GoSplunk
-This is a Unofficial Splunk SDK for Go.  This SDK is intended to make it as simple as possible to create applications for Splunk using Go as possible.
+This is a **unofficial** Splunk SDK for Go.  This SDK is intended to make it as simple as possible to create applications for Splunk using Go as possible.
 
-Most of the existing work is focused on the ability to write a Modular Input.  For example to define a Splunk Modular Input scheme do the following:
+Most of the existing work is focused on the ability to write a Modular Input.  For example to define the example Mod Input scheme found [here](http://docs.splunk.com/Documentation/Splunk/6.4.3/AdvancedDev/ModInputsScripts) in the Splunk Modular Input documentation:
 
 ```go
 scheme := NewModInputScheme("Amazon S3",
